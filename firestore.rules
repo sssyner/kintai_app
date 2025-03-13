@@ -1,0 +1,149 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // Helper functions
+    // ============================================================
+
+    /// ログイン済みか
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    /// 自分のuidか
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    /// その会社の従業員か
+    function isMemberOf(companyId) {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/companies/$(companyId)/employees/$(request.auth.uid));
+    }
+
+    /// その会社の管理者か
+    function isAdminOf(companyId) {
+      return isMemberOf(companyId)
+        && get(/databases/$(database)/documents/companies/$(companyId)/employees/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ============================================================
+    // users collection: 自分のドキュメントのみ読み書き可
+    // ============================================================
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid);
+      allow delete: if isOwner(uid);
+    }
+
+    // ============================================================
+    // inviteCodes collection: 認証済みなら読み取りのみ可
+    // （作成はcompany作成時にbatchで行うため、company作成フローで許可）
+    // ============================================================
+    match /inviteCodes/{code} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      // 更新・削除はadminのみ（companyIdでチェック）
+      allow update, delete: if isAuthenticated()
+        && isAdminOf(resource.data.companyId);
+    }
+
+    // ============================================================
+    // companies collection
+    // ============================================================
+    match /companies/{companyId} {
+      // 会社情報: メンバーなら読み取り可、作成は認証済みなら可
+      allow read: if isMemberOf(companyId);
+      allow create: if isAuthenticated();
+      allow update: if isAdminOf(companyId);
+      allow delete: if false; // 会社削除は禁止
+
+      // ----------------------------------------------------------
+      // employees subcollection
+      // ----------------------------------------------------------
+      match /employees/{employeeId} {
+        // メンバーなら全従業員を閲覧可
+        allow read: if isMemberOf(companyId);
+        // 自分のドキュメント作成（入社時）は認証済みなら可
+        allow create: if isAuthenticated() && request.auth.uid == employeeId;
+        // 自分のプロフィール更新 or adminによる更新
+        allow update: if isOwner(employeeId) || isAdminOf(companyId);
+        // adminのみ削除可
+        allow delete: if isAdminOf(companyId);
+      }
+
+      // ----------------------------------------------------------
+      // attendances subcollection
+      // ----------------------------------------------------------
+      match /attendances/{attendanceId} {
+        // メンバーなら閲覧可（自分以外の出勤状況も管理者が見れるように）
+        allow read: if isMemberOf(companyId);
+        // 作成: メンバーなら可（自分の打刻 or ジオフェンス自動打刻）
+        allow create: if isMemberOf(companyId)
+          && request.resource.data.userId == request.auth.uid;
+        // 更新: 自分の打刻のみ（clockOut追記）or admin
+        allow update: if isMemberOf(companyId)
+          && (resource.data.userId == request.auth.uid || isAdminOf(companyId));
+        // 削除: adminのみ
+        allow delete: if isAdminOf(companyId);
+      }
+
+      // ----------------------------------------------------------
+      // locations subcollection
+      // ----------------------------------------------------------
+      match /locations/{locationId} {
+        // メンバーなら閲覧可
+        allow read: if isMemberOf(companyId);
+        // 作成・更新・削除はadminのみ
+        allow create, update, delete: if isAdminOf(companyId);
+      }
+
+      // ----------------------------------------------------------
+      // leaves subcollection
+      // ----------------------------------------------------------
+      match /leaves/{leaveId} {
+        // メンバーなら閲覧可
+        allow read: if isMemberOf(companyId);
+        // 作成: メンバーが自分の休暇申請
+        allow create: if isMemberOf(companyId)
+          && request.resource.data.userId == request.auth.uid;
+        // 更新: adminによる承認/却下 or 自分の未承認申請の編集
+        allow update: if isMemberOf(companyId)
+          && (isAdminOf(companyId) || resource.data.userId == request.auth.uid);
+        // 削除: adminのみ or 自分の未承認申請
+        allow delete: if isMemberOf(companyId)
+          && (isAdminOf(companyId)
+              || (resource.data.userId == request.auth.uid && resource.data.status == 'pending'));
+      }
+
+      // ----------------------------------------------------------
+      // chatRooms subcollection
+      // ----------------------------------------------------------
+      match /chatRooms/{roomId} {
+        // メンバーなら閲覧可
+        allow read: if isMemberOf(companyId);
+        // 作成: メンバーなら可
+        allow create: if isMemberOf(companyId);
+        // 更新: メンバーなら可（lastMessage更新のため）
+        allow update: if isMemberOf(companyId);
+        // 削除: adminのみ
+        allow delete: if isAdminOf(companyId);
+
+        // messages subcollection
+        match /messages/{messageId} {
+          allow read: if isMemberOf(companyId);
+          allow create: if isMemberOf(companyId)
+            && request.resource.data.senderId == request.auth.uid;
+          allow update, delete: if false; // メッセージの編集・削除は不可
+        }
+      }
+    }
+
+    // デフォルト: 全拒否
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
