@@ -1,0 +1,14 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /profiles/{companyId}/{fileName} {
+      // 同じ会社のメンバーなら読み取り可
+      allow read: if request.auth != null;
+      // 自分のプロフィール画像のみ書き込み可（ファイル名 = userId.jpg）
+      allow write: if request.auth != null
+        && fileName.matches(request.auth.uid + '[.].*')
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}
