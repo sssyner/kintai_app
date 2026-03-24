@@ -1,16 +1,51 @@
-# kintai_app
+# 勤怠管理アプリ
 
-A new Flutter project.
+GPSジオフェンスによる自動打刻対応の勤怠管理アプリ。会社の出退勤管理、休暇申請、チーム内チャットまでをワンストップで提供。
 
-## Getting Started
+## 技術スタック
 
-This project is a starting point for a Flutter application.
+| レイヤー | 技術 |
+|---|---|
+| フレームワーク | Flutter (Dart) |
+| 状態管理 | Riverpod |
+| バックエンド | Firebase (Auth / Firestore / Storage) |
+| 地図・GPS | Google Maps Flutter + Geolocator |
+| ジオフェンス | ネイティブ実装 (Kotlin / Swift) |
+| 通知 | Flutter Local Notifications |
+| データ入出力 | CSV インポート / エクスポート |
 
-A few resources to get you started if this is your first Flutter project:
+## 主な機能
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- **GPS打刻** — ジオフェンス範囲内にいることを確認した上で手動打刻。範囲外では打刻不可
+- **出退勤管理** — 手動打刻、打刻編集、月間サマリー、出勤履歴の閲覧
+- **管理者ダッシュボード** — 全従業員のリアルタイム出勤状況を一覧表示
+- **休暇申請** — 申請 → 承認/却下のワークフロー
+- **チームチャット** — 社内リアルタイムメッセージング
+- **CSV入出力** — 勤務データのインポート・エクスポート
+- **招待制** — 招待コードで従業員が会社に参加
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 画面構成
+
+| 画面 | 説明 |
+|---|---|
+| ホーム（従業員） | 打刻ボタン、今日のステータス、現在地表示 |
+| ホーム（管理者） | 全従業員の出勤状況ダッシュボード |
+| 出勤履歴 | カレンダー形式で過去の打刻を閲覧 |
+| 月間サマリー | 月ごとの勤務時間集計 |
+| 休暇管理 | 申請一覧、ステータス追跡 |
+| ジオフェンス設定 | 管理者が勤務地の範囲を地図上で設定 |
+| チャット | グループ・個別チャット |
+| 設定 | 通知リマインダー、CSV入出力 |
+
+## セットアップ
+
+```bash
+# 依存インストール
+flutter pub get
+
+# Firebase設定（FlutterFire CLI）
+flutterfire configure
+
+# 起動
+flutter run
+```
